@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # Base de Datos
+  db:
+    image: mysql:8.0
+    container_name: factoring_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: factoring_db
+      MYSQL_ROOT_PASSWORD: FactoringRoot2026*
+      MYSQL_PASSWORD: Softclass_Fact_2026
+      MYSQL_USER: factoring_user
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - factoring_network
+
+  # Backend PHP-FPM
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: factoring_backend
+    restart: always
+    volumes:
+      - ../factoringBackend:/var/www/html
+    environment:
+      DB_HOST: db
+      DB_DATABASE: factoring_db
+      DB_USERNAME: factoring_user
+      DB_PASSWORD: Softclass_Fact_2026
+    depends_on:
+      - db
+    networks:
+      - factoring_network
+
+  # Servidor Web para el API (Puerto 8000)
+  backend_web:
+    image: nginx:stable-alpine
+    container_name: factoring_backend_web
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../factoringBackend:/var/www/html
+      - ./backend_web/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    networks:
+      - factoring_network
+
+  # Frontend Angular (Puerto 80)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: factoring_frontend
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - factoring_network
+
+  # n8n Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: factoring_n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=173.201.39.180
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://173.201.39.180:5678/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - factoring_network
+
+networks:
+  factoring_network:
+    driver: bridge
+
+volumes:
+  db_data:
+  n8n_data:

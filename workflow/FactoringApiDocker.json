@@ -1,0 +1,1459 @@
+{
+  "name": "FactoringApiLocal",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "batch": false
+        }
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        2624,
+        1296
+      ],
+      "id": "4523f250-44ed-4206-8ef7-e5319e85af4b",
+      "name": "Extract text from cartera",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "ECoK6p8j9DIeNfTD",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1084fef7-1ec2-42ba-aab1-0928ec843753",
+              "name": "fecha_reporte",
+              "value": "={{ $json.pages[0].markdown.match(/Fecha Consulta:\\s*(\\d{2}\\/\\d{2}\\/\\d{4})/)[1] }}",
+              "type": "string"
+            },
+            {
+              "id": "9020b0b2-47cd-4eb3-89f2-39825362d4e3",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2832,
+        1296
+      ],
+      "id": "38bfd180-043d-423b-bc85-9c9a6a9486e8",
+      "name": "Captura_Fecha_Cartera"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "pages",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        3024,
+        1296
+      ],
+      "id": "d55ac475-2001-4e29-a1d8-5b62ee77f5c9",
+      "name": "Split Out Cartera"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "mistral-small-latest"
+            },
+            {
+              "name": "messages",
+              "value": "={{ \n[\n  {\n    \"role\": \"user\",\n    \"content\": \"Extrae la información completa del siguiente texto y devuélvela estrictamente en formato JSON. Incluye todos los campos disponibles sin omitir ninguno. Si un campo no tiene valor, usa null. Esquema requerido: { \\\"cliente\\\": { \\\"nombre\\\": \\\"\\\", \\\"id\\\": \\\"\\\", \\\"ciudad\\\": \\\"\\\", \\\"actividad_economica\\\": \\\"\\\" }, \\\"operacion\\\": { \\\"id\\\": \\\"\\\", \\\"saldo_total\\\": \\\"\\\", \\\"plazo_meses\\\": \\\"\\\", \\\"tasa_interes_nm\\\": \\\"\\\", \\\"plan_amortizacion\\\": \\\"\\\" }, \\\"garantia\\\": { \\\"estado\\\": \\\"\\\", \\\"tipo\\\": \\\"\\\", \\\"valor_avaluo\\\": \\\"\\\", \\\"detalle\\\": \\\"\\\" }, \\\"detalle_financiero\\\": { \\\"fecha_desembolso\\\": \\\"\\\", \\\"nro_radicado\\\": \\\"\\\", \\\"estado_capital\\\": \\\"\\\", \\\"fecha_vencimiento_capital\\\": \\\"\\\", \\\"valor_desembolso\\\": \\\"\\\", \\\"saldo_capital\\\": \\\"\\\", \\\"vencido\\\": \\\"\\\", \\\"dias_vencido\\\": \\\"\\\", \\\"valor_vencido\\\": \\\"\\\", \\\"tiene_mora\\\": \\\"\\\", \\\"valor_mora\\\": \\\"\\\", \\\"fecha_ultimo_abono\\\": \\\"\\\", \\\"valor_ultimo_abono\\\": \\\"\\\" } } Texto a procesar: \" + $json.markdown\n  }\n] \n}}"
+            },
+            {
+              "name": "response_format",
+              "value": "={{ {\"type\": \"json_object\"} }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          },
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3440,
+        1296
+      ],
+      "id": "c7bb6f58-13a5-4e69-b4a9-5df501d52d9a",
+      "name": "HTTP Request Cartera",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pKUtFWa4EEzrqUhu",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let allRows = [];\n\n// 1. Función para limpiar números (Quita comas y convierte a número real)\nconst limpiarNumero = (valor) => {\n  if (typeof valor === 'number') return valor;\n  if (!valor || valor === \"-\") return 0;\n  // Quitamos las comas (separadores de miles)\n  // Mantenemos el punto si es decimal\n  let limpio = valor.toString().replace(/,/g, '');\n  return parseFloat(limpio) || 0;\n};\n\nlet fechaConsultaGlobal = \"\";\ntry {\n  fechaConsultaGlobal = $(\"Captura_Fecha_Cartera\").first().json.fecha_reporte;\n} catch (e) {\n  fechaConsultaGlobal = \"00/00/0000\";\n}\n\nfor (const item of $input.all()) {\n  try {\n    const rawContent = item.json.choices[0].message.content;\n    const data = JSON.parse(rawContent);\n    \n    let detalleUnificado = \"\";\n    if (data.garantia) {\n      const listaGarantias = Array.isArray(data.garantia) ? data.garantia : [data.garantia];\n      detalleUnificado = listaGarantias.map((g, i) => \n        `Garantía ${i + 1}: ${g.tipo || ''} - ${g.detalle || ''}`\n      ).join(' | ');\n    }\n\n    const detalles = Array.isArray(data.detalle_financiero) \n      ? data.detalle_financiero \n      : [data.detalle_financiero];\n\n    detalles.forEach(desembolso => {\n      const partes = fechaConsultaGlobal.split('/');\n      const mes = partes[1] || \"00\";\n      const anio = partes[2] || \"0000\";\n\n      allRows.push({\n        json: {\n          Cliente: data.cliente.nombre,\n          Identificación: data.cliente.id,\n          ActividadEconómica: data.cliente.actividad_economica,\n          Operación: data.operacion.id,\n          // --- APLICAMOS LIMPIEZA A CAMPOS NUMÉRICOS ---\n          SaldoTotal: limpiarNumero(data.operacion.saldo_total),\n          PlazoMeses: limpiarNumero(data.operacion.plazo_meses),\n          TasaInterés: limpiarNumero(data.operacion.tasa_interes_nm),\n          PlanAmortización: data.operacion.plan_amortizacion,\n          GarantiaDetalle: detalleUnificado, \n          EstadoGarantia: Array.isArray(data.garantia) ? data.garantia[0].estado : (data.garantia?.estado || null),\n          TipoGarantia: Array.isArray(data.garantia) ? data.garantia[0].tipo : (data.garantia?.tipo || null),\n          FechaDesembolso: desembolso.fecha_desembolso,\n          NumeroRadicado: desembolso.nro_radicado,\n          EstadoCapital: desembolso.estado_capital,\n          FechaVencimientoCapital: desembolso.fecha_vencimiento_capital,\n          ValorDesembolso: limpiarNumero(desembolso.valor_desembolso),\n          SaldoCapital: limpiarNumero(desembolso.saldo_capital),\n          Vencido: desembolso.vencido,\n          DiasVencido: limpiarNumero(desembolso.dias_vencido),\n          ValorVencido: limpiarNumero(desembolso.valor_vencido),\n          TieneMora: desembolso.tiene_mora,\n          ValorMora: limpiarNumero(desembolso.valor_mora),\n          FechaUltimoAbono: desembolso.fecha_ultimo_abono,\n          ValorUltimoAbono: limpiarNumero(desembolso.valor_ultimo_abono),\n          NombreArchivo: `Cartera_${mes}_${anio}.xlsx`\n        }\n      });\n    });\n  } catch (e) {\n    console.error(\"Error procesando un ítem: \", e);\n  }\n}\n\nreturn allRows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3648,
+        1296
+      ],
+      "id": "9e3a92c1-3017-4d02-82f7-5bf9f7c81631",
+      "name": "Code Extract Cartera"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items que llegan al nodo\nconst items = $input.all();\n\n// 1. Ordenamos por nombre de Cliente para que el Excel sea profesional y organizado\nitems.sort((a, b) => {\n  const clienteA = (a.json[\"Cliente\"] || \"\").toLowerCase();\n  const clienteB = (b.json[\"Cliente\"] || \"\").toLowerCase();\n  if (clienteA < clienteB) return -1;\n  if (clienteA > clienteB) return 1;\n  return 0;\n});\n\n// 2. Mantenemos el nombre del archivo que ya viene procesado correctamente\n// No necesitamos volver a separar la fecha por '/' porque el nodo anterior ya hizo\n// el trabajo de extraer la Fecha de Consulta global.\nfor (let item of items) {\n  // Si por alguna razón el nombre llega vacío, ponemos uno por defecto, \n  // pero ya no usamos la FechaDesembolso para no separar el reporte en años viejos.\n  if (!item.json.NombreArchivo) {\n    item.json.NombreArchivo = \"Cartera_Reporte_General.xlsx\";\n  }\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        1296
+      ],
+      "id": "024ebda7-f484-48fb-b1f3-a466bdd50f7b",
+      "name": "Code Order Cartera"
+    },
+    {
+      "parameters": {
+        "options": {
+          "batch": false
+        }
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        1696
+      ],
+      "id": "059bef99-a09f-4229-acdc-563cf5dce276",
+      "name": "Extract text Factoring Op",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "ECoK6p8j9DIeNfTD",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "pages",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        3088,
+        1696
+      ],
+      "id": "6d864dfe-dab7-403d-9e69-035b892e3385",
+      "name": "Split Out Factoring Op"
+    },
+    {
+      "parameters": {
+        "jsCode": "let allRows = [];\n\n// Función para limpiar números (Quita comas y convierte a número real)\nconst limpiarNumero = (valor) => {\n  if (typeof valor === 'number') return valor;\n  if (!valor || valor === \"-\" || valor === \"\") return 0;\n  // Quitamos las comas (separadores de miles) y convertimos a decimal\n  let limpio = valor.toString().replace(/,/g, '');\n  return parseFloat(limpio) || 0;\n};\n\nfor (const item of $input.all()) {\n  try {\n    // 1. Extraer el contenido del mensaje de Mistral\n    const rawContent = item.json.choices[0].message.content;\n    const data = JSON.parse(rawContent);\n\n    // 2. Extraer datos generales de la operación\n    const operacionNro = data.operacion.nro;\n    const tasaDescuento = limpiarNumero(data.operacion.tasa_descuento);\n    const fechaOperacion = $(\"Captura_Fecha_Factoring_Op\").first().json.fecha_reporte;\n    const cliente = data.operacion.cliente.nombre;\n    const clienteNit = data.operacion.cliente.nit;\n    const pagador = data.operacion.pagador.nombre;\n    const pagadorNit = data.operacion.pagador.nit;\n    const netoEntregar = limpiarNumero(data.liquidacion.valor_neto_entregar);\n\n    // 3. Recorrer cada factura en el detalle\n    if (data.detalle_facturas && Array.isArray(data.detalle_facturas)) {\n      data.detalle_facturas.forEach(fac => {\n        allRows.push({\n          json: {\n            Operacion: operacionNro,\n            Cliente: cliente,\n            NIT_Cliente: clienteNit,\n            Factura_Numero: fac.doc_nro,\n            // --- APLICAMOS LIMPIEZA A CAMPOS NUMÉRICOS ---\n            Monto: limpiarNumero(fac.valor_neto),\n            Dias: limpiarNumero(fac.dias),\n            Tasa_Descuento: tasaDescuento,\n            Pagador: pagador,\n            NIT_Pagador: pagadorNit,\n            Fecha_Aprobacion: fechaOperacion,\n            Valor_Aprobado: limpiarNumero(fac.valor_presente),\n            Valor_Desembolsado: netoEntregar, // Este es el neto de la liquidación general\n            Fecha_Desembolso: fac.fecha_inicial,\n            Fecha_Vencimiento: fac.fecha_vencimiento,\n            Valor_Reserva: limpiarNumero(fac.valor_reserva),\n            Descuento_Financiero: limpiarNumero(fac.descuento_financiero),\n            // Nombre de archivo sugerido\n            NombreArchivo: `Factoring_OP_${operacionNro}.xlsx`\n          }\n        });\n      });\n    }\n  } catch (e) {\n    console.error(\"Error en Code Extract Factoring: \", e);\n  }\n}\n\nreturn allRows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3792,
+        1696
+      ],
+      "id": "89e35a02-d240-4d59-9813-469f4c27a278",
+      "name": "Code Extract Factoring Op"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "mistral-small-latest"
+            },
+            {
+              "name": "messages",
+              "value": "={{ \n[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analiza esta Solicitud de Operación. El OCR tiene un error de segmentación: la tabla de facturas se corta en 'Vr. Reserva' y los valores de 'Descuento Financiero' aparecen como líneas de texto sueltas justo después.\\n\\nINSTRUCCIONES DE EXTRACCIÓN DINÁMICA:\\n1. IDENTIFICACIÓN DE FILAS: Extrae cada factura manteniendo los 11 campos. \\n2. RECONSTRUCCIÓN DE COLUMNA: Para el campo 'descuento_financiero', busca los valores numéricos que el OCR extrajo como saltos de línea (`\\n`) o texto independiente fuera de los separadores '|'. \\n3. ASIGNACIÓN: El primer valor suelto corresponde a la primera factura, el segundo a la segunda, y así sucesivamente. No asumas que el valor está en la liquidación; búscalo en el cuerpo del texto.\\n\\nJSON REQUERIDO:\\n{\\n  \\\"operacion\\\": {\\n    \\\"nro\\\": \\\"\\\",\\n    \\\"fecha_operacion\\\": \\\"\\\",\\n    \\\"tasa_descuento\\\": \\\"\\\",\\n    \\\"cliente\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\" },\\n    \\\"pagador\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\" }\\n  },\\n  \\\"detalle_facturas\\\": [\\n    {\\n      \\\"doc_nro\\\": \\\"\\\",\\n      \\\"dias\\\": \\\"\\\",\\n      \\\"fecha_inicial\\\": \\\"\\\",\\n      \\\"fecha_vencimiento\\\": \\\"\\\",\\n      \\\"valor_neto\\\": \\\"\\\",\\n      \\\"valor_presente\\\": \\\"\\\",\\n      \\\"valor_reserva\\\": \\\"\\\",\\n      \\\"descuento_financiero\\\": \\\"\\\"\\n    }\\n  ],\\n  \\\"liquidacion\\\": { \\\"valor_neto_entregar\\\": \\\"\\\" }\\n}\\n\\nTexto a procesar: \" + $json.markdown\n  }\n] \n}}"
+            },
+            {
+              "name": "response_format",
+              "value": "={{ {\"type\": \"json_object\"} }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          },
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3552,
+        1696
+      ],
+      "id": "60f5393e-cffe-4c98-8416-eacec5e3fca8",
+      "name": "HTTP Request Factoring Op",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pKUtFWa4EEzrqUhu",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1084fef7-1ec2-42ba-aab1-0928ec843753",
+              "name": "fecha_reporte",
+              "value": "={{ $json.pages[0].markdown.match(/\\|\\s*(\\d{2}\\/\\d{2}\\/\\d{4})/)[1] }}",
+              "type": "string"
+            },
+            {
+              "id": "9020b0b2-47cd-4eb3-89f2-39825362d4e3",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2864,
+        1696
+      ],
+      "id": "899c54f3-738e-43f0-8464-0dd758b8b674",
+      "name": "Captura_Fecha_Factoring_Op"
+    },
+    {
+      "parameters": {
+        "options": {
+          "batch": false
+        }
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        2128
+      ],
+      "id": "44693ce2-1bc8-453d-a76e-9ca3bb7ab544",
+      "name": "Extract text Factoring Pagos",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "ECoK6p8j9DIeNfTD",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "pages",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2944,
+        2128
+      ],
+      "id": "6c3bcc3a-b029-434c-a767-126a66a0c2db",
+      "name": "Split Out Factoring Pagos"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "mistral-small-latest"
+            },
+            {
+              "name": "messages",
+              "value": "={{ \n[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analiza este documento de 'PAGOS CLIENTES'. Extrae la información detallada de la liquidación y el recaudo.\\n\\nINSTRUCCIONES DE EXTRACCIÓN:\\n1. GENERAL: Extrae el número de pago (PAGO N°.), el cliente, su NIT y la fecha de pago.\\n2. TABLA DE LIQUIDACIÓN: Extrae cada fila de la tabla 'Liquidación a fecha pago'. Debes incluir:\\n   - op_nro, doc_nro, pagador, dias, vr_total_titulo, vr_nominal, descuento_financiero, vr_pagado y saldo.\\n3. DETALLE RECAUDO: Extrae el 'Valor Recaudado' y el 'Total Devolución'.\\n\\nJSON REQUERIDO:\\n{\\n  \\\"pago\\\": {\\n    \\\"nro\\\": \\\"\\\",\\n    \\\"fecha\\\": \\\"\\\",\\n    \\\"cliente\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\", \\\"reliquidacion\\\": \\\"\\\", \\\"fecha_reliquidacion\\\": \\\"\\\" }\\n  },\\n  \\\"detalle_facturas\\\": [\\n    {\\n      \\\"op_nro\\\": \\\"\\\",\\n      \\\"doc_nro\\\": \\\"\\\",\\n      \\\"pagador\\\": \\\"\\\",\\n      \\\"cc_o_nit\\\": \\\"\\\",\\n      \\\"fecha_inicial\\\": \\\"\\\",\\n      \\\"fecha_final\\\": \\\"\\\",\\n      \\\"dias\\\": \\\"\\\",\\n      \\\"vr_total_titulo\\\": \\\"\\\",\\n      \\\"vr_nominal\\\": \\\"\\\",\\n      \\\"descuento_financiero\\\": \\\"\\\",\\n      \\\"vr_pagado\\\": \\\"\\\",\\n      \\\"saldo\\\": \\\"\\\"\\n    }\\n  ],\\n  \\\"recaudo\\\": {\\n    \\\"valor_recaudado\\\": \\\"\\\",\\n    \\\"total_devolucion\\\": \\\"\\\"\\n  }\\n}\\n\\nTexto a procesar: \" + $json.markdown\n  }\n] \n}}"
+            },
+            {
+              "name": "response_format",
+              "value": "={{ {\"type\": \"json_object\"} }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          },
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3456,
+        2128
+      ],
+      "id": "5abb9ee2-ede5-4b3e-9efc-9d550d33d4be",
+      "name": "HTTP Request Factoring Pagos",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pKUtFWa4EEzrqUhu",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let allRows = [];\n\n// Función para limpiar números (Quita comas y convierte a número real)\nconst limpiarNumero = (valor) => {\n  if (typeof valor === 'number') return valor;\n  if (!valor || valor === \"-\" || valor === \"\" || valor === undefined) return 0;\n  // Quitamos las comas (separadores de miles) y convertimos a decimal\n  let limpio = valor.toString().replace(/,/g, '');\n  return parseFloat(limpio) || 0;\n};\n\nfor (const item of $input.all()) {\n  try {\n    const rawContent = item.json.choices[0].message.content;\n    const data = JSON.parse(rawContent);\n\n    const pagoNro = data.pago.nro;\n    const fechaPago = data.pago.fecha;\n    const cliente = data.pago.cliente.nombre;\n    const nit = data.pago.cliente.nit;\n    const reliquidacion = data.pago.cliente.reliquidacion;\n    const fechaReliquidacion = data.pago.cliente.fecha_reliquidacion;\n    \n    // Limpiamos el valor recaudado general del comprobante\n    const valorRecaudado = limpiarNumero(data.recaudo.valor_recaudado);\n\n    if (data.detalle_facturas && Array.isArray(data.detalle_facturas)) {\n      data.detalle_facturas.forEach(fac => {\n        allRows.push({\n          json: {\n            Pago_Nro: pagoNro,\n            Fecha_Pago: fechaPago,\n            Cliente: cliente,\n            Nit: nit,\n            Reliquidacion: reliquidacion,\n            Fecha_Reliquidacion: fechaReliquidacion,\n            OP_Relacionada: fac.op_nro,\n            Factura_Nro: fac.doc_nro,\n            CC_o_NIT: fac.cc_o_nit,\n            Pagador: fac.pagador,\n            Fecha_Inicial: fac.fecha_inicial,\n            Fecha_Final: fac.fecha_final,\n            // --- CAMPOS NUMÉRICOS LIMPIOS ---\n            Dias_Cartera: limpiarNumero(fac.dias),\n            Valor_Titulo: limpiarNumero(fac.vr_total_titulo),\n            Valor_Nominal: limpiarNumero(fac.vr_nominal),\n            Descuento_Financiero: limpiarNumero(fac.descuento_financiero),\n            Monto_Pagado: limpiarNumero(fac.vr_pagado),\n            Saldo_Restante: limpiarNumero(fac.saldo),\n            Total_Recaudado_Comprobante: valorRecaudado,\n            // Nombre de archivo\n            NombreArchivo: `Pagos_Factoring_${pagoNro}.xlsx`\n          }\n        });\n      });\n    }\n  } catch (e) {\n    console.error(\"Error en Code Extract Pagos: \", e);\n  }\n}\n\nreturn allRows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3744,
+        2128
+      ],
+      "id": "a82013ff-fb7d-427a-8142-cf6c16beef24",
+      "name": "Code Extract Factoring Pagos"
+    },
+    {
+      "parameters": {
+        "options": {
+          "batch": false
+        }
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        2560
+      ],
+      "id": "9403a320-c3cc-4b8b-9dc5-16620e867db8",
+      "name": "Extract text Factoring Opf",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "ECoK6p8j9DIeNfTD",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1084fef7-1ec2-42ba-aab1-0928ec843753",
+              "name": "fecha_reporte",
+              "value": "={{ $json.pages[0].markdown.match(/\\|\\s*(\\d{2}\\/\\d{2}\\/\\d{4})/)[1] }}",
+              "type": "string"
+            },
+            {
+              "id": "9020b0b2-47cd-4eb3-89f2-39825362d4e3",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2880,
+        2560
+      ],
+      "id": "8542d776-dd2f-4bbb-bf34-eeb2dfb6df9b",
+      "name": "Captura_Fecha_Factoring_Opf"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "pages",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        3104,
+        2560
+      ],
+      "id": "fb0c54ec-3e87-45ce-afd6-a083c6c402f1",
+      "name": "Split Out Factoring Opf"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "mistral-small-latest"
+            },
+            {
+              "name": "messages",
+              "value": "={{ \n[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analiza este documento de 'CONFIRMING-PAGO PROVEEDORES'. Extrae la información técnica y los títulos.\\n\\nINSTRUCCIONES CRÍTICAS DE FILTRADO:\\n1. TABLA DE TÍTULOS: Extrae solo los registros individuales de títulos. \\n2. EXCLUSIÓN: Ignora y NO extraigas las filas que digan 'Total:', 'Subtotal' o que contengan sumatorias de las columnas. Solo queremos los datos de cada factura/título por separado.\\n3. VALIDACIÓN: Cada objeto en 'detalle_titulos' debe tener un 'id_titulo' numérico real.\\n\\nINSTRUCCIONES DE EXTRACCIÓN:\\n1. ENCABEZADO: Extrae el número de operación (OPERACION N°.), Emisor, Deudor y NITs.\\n2. TASA: 'FACTOR DE DESCUENTO' (ej: 1.80% n.m.v.).\\n3. CAMPOS POR TÍTULO: id_titulo, fecha_inicial, fecha_final, dias, vr_nominal, reembolso_g_desembolso, base_negociacion, rend_proyectados y valor_pagar_deudor.\\n\\nJSON REQUERIDO:\\n{\\n  \\\"operacion\\\": {\\n    \\\"nro\\\": \\\"\\\",\\n    \\\"fecha\\\": \\\"\\\",\\n    \\\"factor_descuento\\\": \\\"\\\",\\n    \\\"emisor\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\" },\\n    \\\"deudor\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\" }\\n  },\\n  \\\"detalle_titulos\\\": [\\n    {\\n      \\\"id_titulo\\\": \\\"\\\",\\n      \\\"fecha_inicial\\\": \\\"\\\",\\n      \\\"fecha_final\\\": \\\"\\\",\\n      \\\"dias\\\": \\\"\\\",\\n      \\\"vr_nominal\\\": \\\"\\\",\\n      \\\"reembolso_g_desembolso\\\": \\\"\\\",\\n      \\\"base_negociacion\\\": \\\"\\\",\\n      \\\"rend_proyectados\\\": \\\"\\\",\\n      \\\"valor_pagar_deudor\\\": \\\"\\\"\\n    }\\n  ],\\n  \\\"liquidacion\\\": {\\n    \\\"valor_neto_entregar\\\": \\\"\\\"\\n  }\\n}\\n\\nTexto a procesar: \" + $json.markdown\n  }\n] \n}}"
+            },
+            {
+              "name": "response_format",
+              "value": "={{ {\"type\": \"json_object\"} }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          },
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3568,
+        2560
+      ],
+      "id": "9ddf9948-cffb-4048-aa99-ae7e90051472",
+      "name": "HTTP Request Factoring Opf",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pKUtFWa4EEzrqUhu",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let allRows = [];\n\n// Función para limpiar números (Quita comas y convierte a número real)\nconst limpiarNumero = (valor) => {\n  if (typeof valor === 'number') return valor;\n  if (!valor || valor === \"-\" || valor === \"\" || valor === undefined) return 0;\n  // Quitamos las comas (separadores de miles) y convertimos a decimal\n  let limpio = valor.toString().replace(/,/g, '');\n  return parseFloat(limpio) || 0;\n};\n\nfor (const item of $input.all()) {\n  try {\n    const rawContent = item.json.choices[0].message.content;\n    const data = JSON.parse(rawContent);\n\n    const opNro = data.operacion.nro;\n    const emisor = data.operacion.emisor.nombre;\n    const deudor = data.operacion.deudor.nombre;\n    const emisorNit = data.operacion.emisor.nit;\n    const deudorNit = data.operacion.deudor.nit;\n    const factor = limpiarNumero(data.operacion.factor_descuento);\n\n    if (data.detalle_titulos && Array.isArray(data.detalle_titulos)) {\n      data.detalle_titulos.forEach(titulo => {\n        allRows.push({\n          json: {\n            Operacion: opNro,\n            Emisor: emisor,\n            Emisor_Nit: emisorNit,\n            Deudor: deudor,\n            Deudor_Nit: deudorNit,\n            Tasa_Factor: factor,\n            ID_Titulo: titulo.id_titulo,\n            Fecha_Inicial: titulo.fecha_inicial,\n            Fecha_Final: titulo.fecha_final,\n            // --- CAMPOS NUMÉRICOS LIMPIOS ---\n            Dias: limpiarNumero(titulo.dias),\n            Valor_Nominal: limpiarNumero(titulo.vr_nominal),\n            Reembolso_G_Desembolso: limpiarNumero(titulo.reembolso_g_desembolso),\n            Base_Negociacion: limpiarNumero(titulo.base_negociacion),\n            Rendimientos_Proyectados: limpiarNumero(titulo.rend_proyectados),\n            Valor_Pagar_Deudor: limpiarNumero(titulo.valor_pagar_deudor),\n            // Nombre de archivo\n            NombreArchivo: `Confirming_${opNro}.xlsx`\n          }\n        });\n      });\n    }\n  } catch (e) {\n    console.error(\"Error en Code Extract Confirming: \", e);\n  }\n}\n\nreturn allRows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        2560
+      ],
+      "id": "651ab416-2d2c-4826-9c26-be0dee58891f",
+      "name": "Code Extract Factoring Opf"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "factoring-upload",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        2128,
+        1936
+      ],
+      "id": "24f21e05-e33b-44e2-ba78-0de870e7befe",
+      "name": "Webhook",
+      "webhookId": "81490588-8735-4342-bb87-e74df507cc15"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.categoria }}",
+                    "rightValue": "cartera",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "bf8af8c8-d491-4740-b432-7e46349176d0"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "0"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3762618b-8fbf-4b3c-9687-e044f9f37bba",
+                    "leftValue": "={{ $json.body.categoria }}",
+                    "rightValue": "op",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2d557822-ffab-45c7-a392-1482b1578c4d",
+                    "leftValue": "={{ $json.body.categoria }}",
+                    "rightValue": "pagos",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "fc0f5b02-2ad2-4769-8438-a3b0126351a1",
+                    "leftValue": "={{ $json.body.categoria }}",
+                    "rightValue": "opf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "cf30d018-50ad-4932-bbb7-5a87ca820c73",
+                    "leftValue": "={{ $json.body.categoria }}",
+                    "rightValue": "compraventa",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "4"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2336,
+        1904
+      ],
+      "id": "8d6d4240-4adb-4e53-b2c2-3539dfbc1758",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3232,
+        1296
+      ],
+      "id": "57802e31-0c31-4243-ad3c-873ae240120c",
+      "name": "Loop Over Items Cartera"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3328,
+        1696
+      ],
+      "id": "a00e323b-686f-41d3-abee-3ca2ad0d13b4",
+      "name": "Loop Over Items Op"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3184,
+        2128
+      ],
+      "id": "cd7d9c20-2330-441c-abec-f59bb7d4324c",
+      "name": "Loop Over Items Pagos"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3328,
+        2560
+      ],
+      "id": "9a5e2499-4183-4af2-9c97-bff2e8f41aca",
+      "name": "Loop Over Items Opf"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Archivo procesado y guardado en la Base de Datos exitosamente.\"\n}",
+        "options": {}
+      },
+      "id": "7d9fb972-1682-481e-83b1-0794b693dbc7",
+      "name": "Final Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        4384,
+        1936
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend_web:8000/api/webhook/n8n/cartera",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer MiTokenSuperSecreto123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { data: $json } }}",
+        "options": {}
+      },
+      "id": "38779390-1638-4748-87e9-af516267bfc2",
+      "name": "Send to Laravel (cartera)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4064,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend_web:8000/api/webhook/n8n/op",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer MiTokenSuperSecreto123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { data: $json } }}",
+        "options": {}
+      },
+      "id": "e818642c-a460-46e6-8b8e-d2cf615e1932",
+      "name": "Send to Laravel (op)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4064,
+        1696
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend_web:8000/api/webhook/n8n/pagos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer MiTokenSuperSecreto123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { data: $json } }}",
+        "options": {}
+      },
+      "id": "c58177d2-1b8d-4971-bd10-dc66f9dc4a1e",
+      "name": "Send to Laravel (pagos)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4064,
+        2128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend_web:8000/api/webhook/n8n/opf",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer MiTokenSuperSecreto123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { data: $json } }}",
+        "options": {}
+      },
+      "id": "0e7f752a-14cb-4dbf-b088-bd4b04e0440f",
+      "name": "Send to Laravel (opf)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4064,
+        2560
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "batch": false
+        }
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        2896
+      ],
+      "id": "df680dba-6493-451e-8040-ee82c9bb1789",
+      "name": "Extract text Factoring Compraventa1",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "ECoK6p8j9DIeNfTD",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3328,
+        2896
+      ],
+      "id": "f1c3d0c6-68d9-4227-9a74-d49690d7f47d",
+      "name": "Loop Over Items Compraventa1",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Final Response",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "HTTP Request Factoring Compraventa",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "mistral-small-latest"
+            },
+            {
+              "name": "messages",
+              "value": "={{ \n[\n  {\n    \"role\": \"user\",\n    \"content\": \"Analiza este documento de 'NOTIFICACIÓN DE GARANTÍA MOBILIARIA ENDOSO Y CESIÓN DE DERECHOS ECONÓMICOS'. Extrae la información técnica y los títulos de factura.\\n\\nJSON REQUERIDO:\\n{\\n  \\\"vendedor\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\" },\\n  \\\"comprador\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\" },\\n  \\\"factor\\\": { \\\"nombre\\\": \\\"\\\", \\\"nit\\\": \\\"\\\" },\\n  \\\"detalle_facturas\\\": [\\n    {\\n      \\\"nro_factura\\\": \\\"\\\",\\n      \\\"valor\\\": \\\"\\\",\\n      \\\"fecha_vencimiento\\\": \\\"\\\"\\n    }\\n  ],\\n  \\\"pago\\\": {\\n    \\\"banco\\\": \\\"\\\",\\n    \\\"tipo_cuenta\\\": \\\"\\\",\\n    \\\"cuenta_nro\\\": \\\"\\\"\\n  }\\n}\\n\\nTexto a procesar: \" + $json.extractedText\n  }\n] \n}}"
+            },
+            {
+              "name": "response_format",
+              "value": "={{ {\"type\": \"json_object\"} }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          },
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3568,
+        2896
+      ],
+      "id": "52bc80d4-46bd-42b7-a4c6-eb74faca357b",
+      "name": "HTTP Request Factoring Compraventa1",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pKUtFWa4EEzrqUhu",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let allRows = [];\n\nconst limpiarNumero = (valor) => {\n  if (typeof valor === 'number') return valor;\n  if (!valor || valor === \"-\" || valor === \"\" || valor === undefined) return 0;\n  let limpio = valor.toString().replace(/,/g, '');\n  return parseFloat(limpio) || 0;\n};\n\nfor (const item of $input.all()) {\n  try {\n    const rawContent = item.json.choices[0].message.content;\n    const data = JSON.parse(rawContent);\n\n    const vendedor = data.vendedor.nombre;\n    const vendedorNit = data.vendedor.nit;\n    const comprador = data.comprador.nombre;\n    const compradorNit = data.comprador.nit;\n    const factor = data.factor.nombre;\n    const factorNit = data.factor.nit;\n    const banco = data.pago.banco;\n    const cuenta = data.pago.cuenta_nro;\n\n    if (data.detalle_facturas && Array.isArray(data.detalle_facturas)) {\n      data.detalle_facturas.forEach(fac => {\n        allRows.push({\n          json: {\n            Vendedor: vendedor,\n            NIT_Vendedor: vendedorNit,\n            Comprador: comprador,\n            NIT_Comprador: compradorNit,\n            Factor: factor,\n            NIT_Factor: factorNit,\n            Nro_Factura: fac.nro_factura,\n            Valor: limpiarNumero(fac.valor),\n            Fecha_Vencimiento: fac.fecha_vencimiento,\n            Banco: banco,\n            Cuenta_Nro: cuenta,\n            NombreArchivo: `Compraventa_${vendedor.substring(0,10)}.xlsx`\n          }\n        });\n      });\n    }\n  } catch (e) {\n    console.error(\"Error en Code Extract Compraventa: \", e);\n  }\n}\n\nreturn allRows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        2896
+      ],
+      "id": "35dabe53-a2d2-4d54-845b-0cef4e008821",
+      "name": "Code Extract Factoring Compraventa1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend_web:8000/api/webhook/n8n/compraventa",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer MiTokenSuperSecreto123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { data: $json } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4064,
+        2896
+      ],
+      "id": "6e832c16-58f4-4e09-af7b-4040fd28f977",
+      "name": "Send to Laravel (compraventa)1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract text from cartera": {
+      "main": [
+        [
+          {
+            "node": "Captura_Fecha_Cartera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Captura_Fecha_Cartera": {
+      "main": [
+        [
+          {
+            "node": "Split Out Cartera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Cartera": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Cartera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request Cartera": {
+      "main": [
+        [
+          {
+            "node": "Code Extract Cartera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Extract Cartera": {
+      "main": [
+        [
+          {
+            "node": "Code Order Cartera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Order Cartera": {
+      "main": [
+        [
+          {
+            "node": "Send to Laravel (cartera)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text Factoring Op": {
+      "main": [
+        [
+          {
+            "node": "Captura_Fecha_Factoring_Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Factoring Op": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Extract Factoring Op": {
+      "main": [
+        [
+          {
+            "node": "Send to Laravel (op)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request Factoring Op": {
+      "main": [
+        [
+          {
+            "node": "Code Extract Factoring Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Captura_Fecha_Factoring_Op": {
+      "main": [
+        [
+          {
+            "node": "Split Out Factoring Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text Factoring Pagos": {
+      "main": [
+        [
+          {
+            "node": "Split Out Factoring Pagos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Factoring Pagos": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Pagos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request Factoring Pagos": {
+      "main": [
+        [
+          {
+            "node": "Code Extract Factoring Pagos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Extract Factoring Pagos": {
+      "main": [
+        [
+          {
+            "node": "Send to Laravel (pagos)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text Factoring Opf": {
+      "main": [
+        [
+          {
+            "node": "Captura_Fecha_Factoring_Opf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Captura_Fecha_Factoring_Opf": {
+      "main": [
+        [
+          {
+            "node": "Split Out Factoring Opf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Factoring Opf": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Opf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request Factoring Opf": {
+      "main": [
+        [
+          {
+            "node": "Code Extract Factoring Opf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Extract Factoring Opf": {
+      "main": [
+        [
+          {
+            "node": "Send to Laravel (opf)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Extract text from cartera",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract text Factoring Op",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract text Factoring Pagos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract text Factoring Opf",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract text Factoring Compraventa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items Cartera": {
+      "main": [
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request Cartera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items Op": {
+      "main": [
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request Factoring Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items Pagos": {
+      "main": [
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request Factoring Pagos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items Opf": {
+      "main": [
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request Factoring Opf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Laravel (cartera)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Cartera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Laravel (op)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Laravel (pagos)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Pagos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Laravel (opf)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Opf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text Factoring Compraventa1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Compraventa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request Factoring Compraventa1": {
+      "main": [
+        [
+          {
+            "node": "Code Extract Factoring Compraventa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Extract Factoring Compraventa1": {
+      "main": [
+        [
+          {
+            "node": "Send to Laravel (compraventa)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Laravel (compraventa)1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items Compraventa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items Compraventa1": {
+      "main": [
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request Factoring Compraventa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b452a053-ef78-4d40-b048-7847a0f34ae2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ef0a918dd80b76d8f26f0879a2f66ca7c5a4d802961d94cddfedccd6f720ab90"
+  },
+  "id": "eOmKEhkzIxPpN1g7",
+  "tags": []
+}
