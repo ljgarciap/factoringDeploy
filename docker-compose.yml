@@ -69,11 +69,11 @@ services:
     ports:
       - "5678:5678"
     environment:
-      - N8N_HOST=173.201.39.180
+      - N8N_HOST=173.201.39.182
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
-      - WEBHOOK_URL=http://173.201.39.180:5678/
+      - WEBHOOK_URL=http://173.201.39.182:5678/
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
