@@ -72,7 +72,7 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - N8N_BASE_URL=http://auto.proseguirliquidez.com:8000/n8n/
-      - WEBHOOK_URL=http://auto.proseguirliquidez.com:8000/n8n/webhook/
+      - WEBHOOK_URL=http://auto.proseguirliquidez.com:8000/n8n/
       - NODE_ENV=production
     volumes:
       - n8n_data:/home/node/.n8n
