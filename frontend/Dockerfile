@@ -15,7 +15,7 @@ RUN npm run build -- --configuration production
 FROM nginx:stable-alpine
 
 # Copiamos el build a la carpeta de nginx
-COPY --from=build-stage /app/dist/factoringFrontend /usr/share/nginx/html
+COPY --from=build-stage /app/dist/factoring-frontend/browser /usr/share/nginx/html
 
 # Copiamos configuración de Nginx para Angular (Rutas)
 COPY deployment_docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
