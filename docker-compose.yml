@@ -73,6 +73,7 @@ services:
       - N8N_PROTOCOL=http
       - N8N_BASE_URL=http://auto.proseguirliquidez.com:8000/n8n/
       - WEBHOOK_URL=http://auto.proseguirliquidez.com:8000/n8n/
+      - N8N_CORS_ALLOWED_ORIGINS=*
       - NODE_ENV=production
     volumes:
       - n8n_data:/home/node/.n8n
