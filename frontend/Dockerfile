@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copiamos archivos de dependencias
 COPY factoringFrontend/package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copiamos el resto del código y compilamos
 COPY factoringFrontend/ .
