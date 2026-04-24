@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # Base de Datos
@@ -19,8 +18,8 @@ services:
   # Backend PHP-FPM
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deployment_docker/backend/Dockerfile
     container_name: factoring_backend
     restart: always
     volumes:
@@ -53,8 +52,8 @@ services:
   # Frontend Angular (Puerto 80)
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deployment_docker/frontend/Dockerfile
     container_name: factoring_frontend
     restart: always
     ports:
