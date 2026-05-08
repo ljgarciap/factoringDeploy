@@ -2,13 +2,14 @@
 FROM node:20 as build-stage
 
 WORKDIR /app
+ARG FRONTEND_DIR=factoringFrontend
 
 # Copiamos archivos de dependencias
-COPY factoringFrontend/package*.json ./
+COPY ${FRONTEND_DIR}/package*.json ./
 RUN npm install --legacy-peer-deps
 
 # Copiamos el resto del código y compilamos
-COPY factoringFrontend/ .
+COPY ${FRONTEND_DIR}/ .
 RUN npm run build -- --configuration production
 
 # Etapa 2: Serve
